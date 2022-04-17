@@ -7,6 +7,7 @@ namespace W {
 
 /* NTDLL shit*/
 namespace ntdll {
+#define RTL_MAX_DRIVE_LETTERS 32
 
 	typedef unsigned long ULONG;
 #if defined(_WIN64)
@@ -54,7 +55,7 @@ namespace ntdll {
 		USHORT Length;
 		USHORT MaximumLength;
 		PCHAR Buffer;
-	} ANSI_STRING, * PANSI_STRING;
+	} ANSI_STRING, * PANSI_STRING, STRING, * PSTRING, OEM_STRING, * POEM_STRING;
 
 
 	typedef struct _OBJECT_ATTRIBUTES {
@@ -85,6 +86,62 @@ namespace ntdll {
 		} u;
 		LONGLONG QuadPart;
 	} LARGE_INTEGER, *PLARGE_INTEGER;
+
+	typedef struct _CLIENT_ID {
+		HANDLE UniqueProcess;
+		HANDLE UniqueThread;
+	} CLIENT_ID, *PCLIENT_ID;
+
+	typedef struct _CURDIR {
+		UNICODE_STRING DosPath;
+		HANDLE Handle;
+	} CURDIR, * PCURDIR;
+
+	typedef struct _RTL_DRIVE_LETTER_CURDIR {
+		USHORT Flags;
+		USHORT Length;
+		ULONG TimeStamp;
+		STRING DosPath;
+	} RTL_DRIVE_LETTER_CURDIR, * PRTL_DRIVE_LETTER_CURDIR;
+
+	typedef struct _RTL_USER_PROCESS_PARAMETERS {
+		ULONG MaximumLength;
+		ULONG Length;
+
+		ULONG Flags;
+		ULONG DebugFlags;
+
+		HANDLE ConsoleHandle;
+		ULONG ConsoleFlags;
+		HANDLE StandardInput;
+		HANDLE StandardOutput;
+		HANDLE StandardError;
+
+		CURDIR CurrentDirectory;
+		UNICODE_STRING DllPath;
+		UNICODE_STRING ImagePathName;
+		UNICODE_STRING CommandLine;
+		PVOID Environment;
+
+		ULONG StartingX;
+		ULONG StartingY;
+		ULONG CountX;
+		ULONG CountY;
+		ULONG CountCharsX;
+		ULONG CountCharsY;
+		ULONG FillAttribute;
+
+		ULONG WindowFlags;
+		ULONG ShowWindowFlags;
+		UNICODE_STRING WindowTitle;
+		UNICODE_STRING DesktopInfo;
+		UNICODE_STRING ShellInfo;
+		UNICODE_STRING RuntimeData;
+		RTL_DRIVE_LETTER_CURDIR CurrentDirectories[RTL_MAX_DRIVE_LETTERS];
+
+		ULONG EnvironmentSize;
+		ULONG EnvironmentVersion;
+	} RTL_USER_PROCESS_PARAMETERS, * PRTL_USER_PROCESS_PARAMETERS;
 
 	typedef void(__stdcall* LdrLoadDll)(
 			PWCHAR PathToFile,

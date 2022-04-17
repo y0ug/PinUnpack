@@ -276,100 +276,149 @@ VOID HookNtProtectVirtualMemory(
         << ")" << " = " << std::hex << ntstatus
         << std::endl;*/
 
-    ntprotect_lookup.erase(tid);
+ntprotect_lookup.erase(tid);
 }
 
- std::string WcharToString(wchar_t* src) {
-     std::wstringstream wss;
-     wss << "L\"" << src << "\"";
-     std::wstring ws = wss.str();
-     return std::string(ws.begin(), ws.end());
- }
+std::string WcharToString(wchar_t* src) {
+    std::wstringstream wss;
+    wss << "L\"" << src << "\"";
+    std::wstring ws = wss.str();
+    return std::string(ws.begin(), ws.end());
+}
 
- VOID HookNtOpenFile(
+VOID HookNtOpenFile(
     ntdll::PHANDLE            FileHandle,
     ntdll::ACCESS_MASK        DesiredAccess,
     ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
     ntdll::PIO_STATUS_BLOCK   IoStatusBlock,
     ntdll::ULONG              ShareAccess,
     ntdll::ULONG              OpenOptions
- ) 
- {
-     OS_THREAD_ID tid = PIN_GetTid();
+)
+{
+    OS_THREAD_ID tid = PIN_GetTid();
 
-     *logging << tid << " "
-         << "NtOpenFile" << "("
-         << std::hex << *FileHandle
-         << ", " << std::hex << DesiredAccess
-         << ", " << WcharToString((wchar_t*)ObjectAttributes->ObjectName->Buffer)
-         << ", " << std::hex << IoStatusBlock
-         << ", " << std::hex << ShareAccess
-         << ", " << std::hex << OpenOptions
-         << ")" 
-         << std::endl;
- }
+    *logging << tid << " "
+        << "NtOpenFile" << "("
+        << std::hex << *FileHandle
+        << ", " << std::hex << DesiredAccess
+        << ", " << WcharToString((wchar_t*)ObjectAttributes->ObjectName->Buffer)
+        << ", " << std::hex << IoStatusBlock
+        << ", " << std::hex << ShareAccess
+        << ", " << std::hex << OpenOptions
+        << ")"
+        << std::endl;
+}
 
- VOID HookNtCreateFile(
-     ntdll::PHANDLE            FileHandle,
-     ntdll::ACCESS_MASK        DesiredAccess,
-     ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
-     ntdll::PIO_STATUS_BLOCK   IoStatusBlock,
-     ntdll::PLARGE_INTEGER     AllocationSize,
-     ntdll::ULONG              FileAttributes,
-     ntdll::ULONG              ShareAccess,
-     ntdll::ULONG              CreateDisposition,
-     ntdll::ULONG              CreateOptions,
-     ntdll::PVOID              EaBuffer,
-     ntdll::ULONG              EaLength
- )
- {
-     OS_THREAD_ID tid = PIN_GetTid();
+VOID HookNtCreateFile(
+    ntdll::PHANDLE            FileHandle,
+    ntdll::ACCESS_MASK        DesiredAccess,
+    ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
+    ntdll::PIO_STATUS_BLOCK   IoStatusBlock,
+    ntdll::PLARGE_INTEGER     AllocationSize,
+    ntdll::ULONG              FileAttributes,
+    ntdll::ULONG              ShareAccess,
+    ntdll::ULONG              CreateDisposition,
+    ntdll::ULONG              CreateOptions,
+    ntdll::PVOID              EaBuffer,
+    ntdll::ULONG              EaLength
+)
+{
+    OS_THREAD_ID tid = PIN_GetTid();
 
-     *logging << tid << " "
-         << "NtCreateFile" << "("
-         << std::hex << *FileHandle
-         << ", " << std::hex << DesiredAccess
-         << ", " << WcharToString((wchar_t*)ObjectAttributes->ObjectName->Buffer)
-         << ", " << std::hex << IoStatusBlock
-         << ", " << std::hex << AllocationSize
-         << ", " << std::hex << FileAttributes
-         << ", " << std::hex << ShareAccess
-         << ", " << std::hex << CreateDisposition
-         << ", " << std::hex << CreateOptions
-         << ", " << std::hex << EaBuffer
-         << ", " << std::hex << EaLength
-         << ")"
-         << std::endl;
- }
+    *logging << tid << " "
+        << "NtCreateFile" << "("
+        << std::hex << *FileHandle
+        << ", " << std::hex << DesiredAccess
+        << ", " << WcharToString((wchar_t*)ObjectAttributes->ObjectName->Buffer)
+        << ", " << std::hex << IoStatusBlock
+        << ", " << std::hex << AllocationSize
+        << ", " << std::hex << FileAttributes
+        << ", " << std::hex << ShareAccess
+        << ", " << std::hex << CreateDisposition
+        << ", " << std::hex << CreateOptions
+        << ", " << std::hex << EaBuffer
+        << ", " << std::hex << EaLength
+        << ")"
+        << std::endl;
+}
 
- VOID HookLdrGetProcedureAddress(
-     ntdll::HMODULE ModuleHandle,
-     ntdll::PANSI_STRING FunctionName,
-     ntdll::WORD Ordinal,
-     ntdll::PVOID* FunctionAddress
- )
- {
-     OS_THREAD_ID tid = PIN_GetTid();
+VOID HookLdrGetProcedureAddress(
+    ntdll::HMODULE ModuleHandle,
+    ntdll::PANSI_STRING FunctionName,
+    ntdll::WORD Ordinal,
+    ntdll::PVOID* FunctionAddress
+)
+{
+    OS_THREAD_ID tid = PIN_GetTid();
 
-     PinLocker lock;
-     IMG img = IMG_FindByAddress((ADDRINT)ModuleHandle);
-     std::string name = "";
-     if (img.is_valid()) {
-         name = util::getDllName(IMG_Name(img));
-     }
-     *logging << tid << " "
-         << "LdrGetProcedureAddress" << "("
-         << std::hex << ModuleHandle << " " << name
-         << ", ";
-         
+    PinLocker lock;
+    IMG img = IMG_FindByAddress((ADDRINT)ModuleHandle);
+    std::string name = "";
+    if (img.is_valid()) {
+        name = util::getDllName(IMG_Name(img));
+    }
+    *logging << tid << " "
+        << "LdrGetProcedureAddress" << "("
+        << std::hex << ModuleHandle << " " << name
+        << ", ";
+
     if (FunctionName != NULL) {
         *logging << FunctionName->Buffer;
     }
-        *logging << ", " << Ordinal
-         << ", " << FunctionAddress
-         << ")"
-         << std::endl;
- }
+    *logging << ", " << Ordinal
+        << ", " << FunctionAddress
+        << ")"
+        << std::endl;
+}
+
+
+VOID HookNtOpenProcess(
+    ntdll::PHANDLE            ProcessHandle,
+    ntdll::ACCESS_MASK        DesiredAccess,
+    ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
+    ntdll::PCLIENT_ID         ClientId
+)
+{
+    OS_THREAD_ID tid = PIN_GetTid();
+
+    *logging << tid << " "
+        << "NtOpenProcess" << "("
+        << std::hex << DesiredAccess
+        << ", " << ClientId->UniqueProcess
+        << ")";
+}
+
+VOID HookNtCreateProcess(
+    ntdll::PHANDLE ProcessHandle,
+    ntdll::ACCESS_MASK DesiredAccess,
+    ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
+    ntdll::HANDLE ParentProcess,
+    BOOL InheritObjectTable,
+    ntdll::HANDLE SectionHandle,
+    ntdll::HANDLE DebugPort,
+    ntdll::HANDLE ExceptionPort
+)
+{
+    OS_THREAD_ID tid = PIN_GetTid();
+
+    *logging << tid << " "
+        << "NtCreateProcess" << "("
+        << std::hex << DesiredAccess
+        << ", " << WcharToString((wchar_t*)ObjectAttributes->ObjectName->Buffer)
+        << ")" << std::endl;
+}
+
+void HookNtCreateUserProcess(
+    ntdll::PRTL_USER_PROCESS_PARAMETERS ProcessParameters
+) 
+{
+    OS_THREAD_ID tid = PIN_GetTid();
+
+    *logging << tid << " "
+        << "HookNtCreateUserProcess" << "("
+        << WcharToString((wchar_t*)ProcessParameters->CommandLine.Buffer)
+        << ")" << std::endl;
+}
 void SetupHookNtdll(IMG Image)
 {
     const std::string dllName = util::getDllName(IMG_Name(Image));
@@ -478,6 +527,7 @@ void SetupHookNtdll(IMG Image)
                 IARG_END);
             RTN_Close(targetRtn);
         }
+
         targetRtn = RTN_FindByName(Image, "LdrGetProcedureAddressForCaller");
         if (targetRtn.is_valid()) {
             *logging << "Hook LdrGetProcedureAddressForCaller  " << std::endl;
@@ -491,16 +541,74 @@ void SetupHookNtdll(IMG Image)
             RTN_Close(targetRtn);
         }
 
-        ntdll::LdrLoadDll pLdrLoadDll = (ntdll::LdrLoadDll)RTN_Funptr(RTN_FindByName(Image, "LdrLoadDll"));
+        targetRtn = RTN_FindByName(Image, "NtOpenProcess");
+        if (targetRtn.is_valid()) {
+            *logging << "Hook NtOpenProcess  " << std::endl;
+            RTN_Open(targetRtn);
+            RTN_InsertCall(targetRtn, IPOINT_BEFORE, (AFUNPTR)HookNtOpenProcess,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 3,
+                IARG_END);
+            RTN_Close(targetRtn);
+        }
+
+
+        targetRtn = RTN_FindByName(Image, "NtCreateProcess");
+        if (targetRtn.is_valid()) {
+            *logging << "Hook NtCreateProcess  " << std::endl;
+            RTN_Open(targetRtn);
+            RTN_InsertCall(targetRtn, IPOINT_BEFORE, (AFUNPTR)HookNtCreateProcess,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 3,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 4,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 5,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 6,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 7,
+
+                IARG_END);
+            RTN_Close(targetRtn);
+        }
+        targetRtn = RTN_FindByName(Image, "NtCreateProcessEx");
+        if (targetRtn.is_valid()) {
+            *logging << "Hook NtCreateProcessEx  " << std::endl;
+            RTN_Open(targetRtn);
+            RTN_InsertCall(targetRtn, IPOINT_BEFORE, (AFUNPTR)HookNtCreateProcess,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 3,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 4,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 5,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 6,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 7,
+
+                IARG_END);
+            RTN_Close(targetRtn);
+        }
+
+        targetRtn = RTN_FindByName(Image, "NtCreateUserProcess");
+        if (targetRtn.is_valid()) {
+            *logging << "Hook NtCreateUserProcess  " << std::endl;
+            RTN_Open(targetRtn);
+            RTN_InsertCall(targetRtn, IPOINT_BEFORE, (AFUNPTR)HookNtCreateUserProcess,
+                IARG_FUNCARG_ENTRYPOINT_VALUE, 8,
+                IARG_END);
+            RTN_Close(targetRtn);
+        }
+
+        /**/ntdll::LdrLoadDll pLdrLoadDll = (ntdll::LdrLoadDll)RTN_Funptr(RTN_FindByName(Image, "LdrLoadDll"));
         ntdll::LdrGetProcedureAddress pLdrGetProcedureAddress = (ntdll::LdrGetProcedureAddress)RTN_Funptr(RTN_FindByName(Image, "LdrGetProcedureAddress"));
         ntdll::RtlInitUnicodeString pRtlInitUnicodeString = (ntdll::RtlInitUnicodeString)RTN_Funptr(RTN_FindByName(Image, "RtlInitUnicodeString"));
         ntdll::RtlInitAnsiString pRtlInitAnsiString = (ntdll::RtlInitAnsiString)RTN_Funptr(RTN_FindByName(Image, "RtlInitAnsiString"));
 
-        *logging << "LdrLoadDll @ " << std::hex << pLdrLoadDll << std::endl
+        /**logging << "LdrLoadDll @ " << std::hex << pLdrLoadDll << std::endl
             << "LdrGetProcedureAddress @ " << std::hex << pLdrGetProcedureAddress << std::endl
             << "RtlInitUnicodeString @ " << std::hex << pRtlInitUnicodeString << std::endl
-            << "RtlInitAnsiString @ " << std::hex << pRtlInitAnsiString << std::endl;
-
+            << "RtlInitAnsiString @ " << std::hex << pRtlInitAnsiString << std::endl;*/
 #ifndef _WIN64
         gX86SwitchTo64BitMode = X86SwitchTo64BitMode();
 
