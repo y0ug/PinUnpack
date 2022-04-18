@@ -57,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument('-m','--module', default='PinUnpack')
 
     parser.add_argument('-a', '--arg')
+    parser.add_argument('--dbg', action='store_true')
     parser.add_argument('filename')
     args = parser.parse_args()
     log.setLevel(max(2 - args.verbose_count, 1) * 10)
@@ -80,8 +81,21 @@ if __name__ == "__main__":
 
     module = f'{args.module}{bit}.dll'
     log_fn = f'{target_fn}.log'
-    cli = [pin_path, '-t', os.path.join(script_path, module), '-o', log_fn, '--']
 
+    # path to pin.exe
+    cli = [pin_path, ]
+    
+    # Debug we setup pause_tool switch
+    if args.dbg:
+        cli += ['-pause_tool', '30']
+
+    # Set tool module and options
+    cli += ['-t', os.path.join(script_path, module), '-o', log_fn]
+
+    # Finish pin.exe switch
+    cli += ['--', ]
+
+    # Target exe/argv
     if pe.is_dll():
         cli += [os.path.join(script_path, f'dll_load{bit}.exe'), target_fn]
     else:
