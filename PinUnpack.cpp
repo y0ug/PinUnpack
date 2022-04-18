@@ -397,7 +397,6 @@ VOID* _HookNtOpenProcess(
 }
 
 VOID* _HookNtCreateProcess(
-	void* ctx,
 	ntdll::PHANDLE ProcessHandle,
 	ntdll::ACCESS_MASK DesiredAccess,
 	ntdll::POBJECT_ATTRIBUTES ObjectAttributes,
@@ -718,10 +717,7 @@ void SyscallEntry(
 	ADDRINT  syscall_number = PIN_GetSyscallNumber(ctx, std);
 
 
-	/**logging << "thread_id: " << thread_id
-		<< "\tsyscall: " << syscall_number
-		<< std::endl;*/
-	
+
 	SYSCALLTRACK st{ syscall_number, NULL };
 	
 	if (syscall_number < MAX_SYSCALL) {
