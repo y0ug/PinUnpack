@@ -270,9 +270,11 @@
   <ItemGroup>
     <ClCompile Include="PinUnpack.cpp" />
     <ClCompile Include="Util.cpp" />
+    <ClCompile Include="SyscallHook.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ntdll.h" />
+    <ClInclude Include="SyscallHook.h" />
     <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

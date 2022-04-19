@@ -17,9 +17,20 @@ namespace ntdll {
 	typedef unsigned short USHORT;
 	typedef unsigned short WORD;
 	typedef unsigned long DWORD;
+	typedef DWORD* DWORD_PTR;
 
 	typedef long LONG;
 	typedef unsigned long ULONG;
+
+#if defined(_WIN64)
+		typedef __int64 LONG_PTR;
+#else
+		typedef long LONG_PTR;
+#endif
+
+	typedef LONG_PTR LPARAM;
+
+
 #if !defined(_M_IX86)
 	typedef __int64 LONGLONG;
 	typedef unsigned __int64 ULONGLONG;
@@ -45,6 +56,7 @@ namespace ntdll {
 	typedef PVOID HANDLE;
 	typedef HANDLE* PHANDLE;
 	typedef HANDLE HMODULE;
+	typedef HANDLE HINSTANCE;
 
 	typedef long NTSTATUS;
 

@@ -62,7 +62,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     log.setLevel(max(2 - args.verbose_count, 1) * 10)
 
-    pin_path = 'C:\\pin\\pin.exe'
+    pin_path = 'Y:\\pin.exe'
     if 'Microsoft' in uname().release:
         pin_path = '/mnt/c/pin/pin.exe'
 
@@ -88,6 +88,8 @@ if __name__ == "__main__":
     # Debug we setup pause_tool switch
     if args.dbg:
         cli += ['-pause_tool', '30']
+
+    #cli += ['-follow_execv', ]
 
     # Set tool module and options
     cli += ['-t', os.path.join(script_path, module), '-o', log_fn]
