@@ -1,5 +1,4 @@
 #pragma once
-#include "pin.H"
 
 /* NTDLL shit*/
 namespace ntdll {
@@ -18,7 +17,7 @@ namespace ntdll {
 	typedef unsigned short WORD;
 	typedef unsigned long DWORD;
 	typedef DWORD* DWORD_PTR;
-
+	typedef DWORD BOOL;
 	typedef long LONG;
 	typedef unsigned long ULONG;
 
@@ -50,6 +49,7 @@ namespace ntdll {
 	typedef const WCHAR* PCWSTR;
 	typedef const CHAR* PCSTR;
 
+	typedef void VOID;
 	typedef VOID* PVOID;
 	typedef void* LPVOID;
 
@@ -167,7 +167,7 @@ namespace ntdll {
 	 */
 	typedef void(__stdcall* LdrLoadDll)(
 			PWCHAR PathToFile,
-			ULONG Flags,
+			ULONG *Flags,
 			PUNICODE_STRING ModuleFileName,
 			HMODULE* ModuleHandle
 	);
@@ -187,6 +187,14 @@ namespace ntdll {
 	typedef void(__stdcall* RtlInitAnsiString)(
 			PANSI_STRING DestinationString,
 			PCSTR SourceString
+	);
+
+	typedef void(__stdcall* RtlFreeUnicodeString)(
+			PUNICODE_STRING UnicodeString
+	);
+
+	typedef void(__stdcall* RtlFreeAnsiString)(
+		    PANSI_STRING AnsiString
 	);
 
 	typedef DWORD(__stdcall* LPTHREAD_START_ROUTINE) (

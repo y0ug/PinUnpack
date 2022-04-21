@@ -1,9 +1,3 @@
-/*
- * Copyright (C) 2007-2021 Intel Corporation.
- * SPDX-License-Identifier: MIT
- */
-
-
 #include "pin.H"
 #include <iostream>
 #include <fstream>
@@ -41,15 +35,28 @@ ADDRINT __declspec(naked) X86SwitchTo64BitMode(void)
 }
 #endif
 
-std::ofstream* logging;
-std::map <THREADID, SYSCALLTRACK> syscall_lookup;
-SyscallNameMap syscallMap;
-TLS_KEY syscallTlsKey;
+class UnpackCtx {
+public:
+	UnpackCtx() {};
+	~UnpackCtx() {};
 
+	std::string TargetModuleName;
+	std::vector<IMG> TargetsImg;
+	SyscallNameMap syscallMap;
+	TLS_KEY syscallTlsKey;
+};
+
+
+std::ofstream* logging;
+UnpackCtx _UnpackCtx;
+ntdll::HMODULE hDump = NULL;
+extern std::map<ntdll::PVOID, MEMTRACK> memtrack_lookup;
 
 
 KNOB<std::string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
 	"o", "", "Specify file name for the output");
+KNOB<std::string> KnobModuleName(KNOB_MODE_WRITEONCE, "pintool",
+	"m", "", "Analysed module name (by default same as app name)");
 
 /*!
  *  Print out help message.
@@ -110,7 +117,7 @@ SyscallIntercept InterceptEntry[]{
 	{"ZwCreateProcessEx", 8, _HookNtCreateProcess},
 	{"ZwCreateUserProcess", 11, _HookNtCreateUserProcess},
 	{"ZwAllocateVirtualMemory", 6, _HookNtAllocateVirtualMemory},
-	//{"ZwProtectVirtualMemory", 5, _HookNtProtectVirtualMemory},
+	{"ZwProtectVirtualMemory", 5, _HookNtProtectVirtualMemory},
 	{"ZwFreeVirtualMemory", 4, _HookNtFreeVirtualMemory},
 	{"NtCreateThread", 8, _NtCreateThread},
 	{"NtCreateThreadEx", 8, _NtCreateThreadEx},
@@ -118,7 +125,7 @@ SyscallIntercept InterceptEntry[]{
 
 SyscallIntercept InterceptExit[]{
 	{"ZwAllocateVirtualMemory", 1, _HookNtAllocateVirtualMemoryRet},
-	//{"ZwProtectVirtualMemory", 1, _HookNtProtectVirtualMemoryRet},
+	{"ZwProtectVirtualMemory", 1, _HookNtProtectVirtualMemoryRet},
 	{"ZwFreeVirtualMemory", 1, _HookNtFreeVirtualMemoryRet},
 };
 
@@ -129,14 +136,15 @@ void SyscallExit(
 	SYSCALL_STANDARD std,
 	void* v)
 {
-	SYSCALLTRACK *st = (SYSCALLTRACK*)PIN_GetThreadData(syscallTlsKey, tid);
+	PinLocker lock;
+	SYSCALLTRACK *st = (SYSCALLTRACK*)PIN_GetThreadData(_UnpackCtx.syscallTlsKey, tid);
 	if (st == NULL) {
 		*logging << "Syscall lookup error, "
 			<< std::hex << tid << " not found" << std::endl;
 		return;
 	}
 
-	const char* name = syscallMap.getName(st->syscall_number);
+	const char* name = _UnpackCtx.syscallMap.getName(st->syscall_number);
 	if (name != NULL) {
 		for (const auto& e : InterceptExit) {
 			if (strcmp(name, e.szFunctionName) == 0) {
@@ -165,7 +173,7 @@ void SyscallExit(
 
 	//syscall_lookup.erase(tid);
 	delete st;
-	PIN_SetThreadData(syscallTlsKey, NULL, tid);
+	PIN_SetThreadData(_UnpackCtx.syscallTlsKey, NULL, tid);
 }
 
 void SyscallEntry(
@@ -174,11 +182,13 @@ void SyscallEntry(
 	SYSCALL_STANDARD std,
 	void* v)
 {
+	PinLocker lock;
+
 	UINT32  syscall_number = PIN_GetSyscallNumber(ctx, std);
 
 	SYSCALLTRACK *st = new SYSCALLTRACK{syscall_number, NULL};
 
-	const char* name = syscallMap.getName(syscall_number);
+	const char* name = _UnpackCtx.syscallMap.getName(syscall_number);
 	if (name != NULL) {
 		for (const auto& e : InterceptEntry) {
 			if (strcmp(name, e.szFunctionName) == 0) {
@@ -210,7 +220,7 @@ void SyscallEntry(
 		}
 	}
 
-	PIN_SetThreadData(syscallTlsKey, (void*)st, tid);
+	PIN_SetThreadData(_UnpackCtx.syscallTlsKey, (void*)st, tid);
 
 	/*
 	if (syscall_lookup.count(tid) != NULL) {
@@ -232,7 +242,7 @@ ntdll::RtlInitAnsiString g_pRtlInitAnsiString = NULL;
 
 void SetupHookNtdll(IMG Image)
 {
-	syscallMap.load((ntdll::HMODULE)IMG_StartAddress(Image));
+	_UnpackCtx.syscallMap.load((ntdll::HMODULE)IMG_StartAddress(Image));
 
 	std::string fns[] = { "LdrGetProcedureAddress", "LdrGetProcedureAddressForCaller" };
 	for (const auto& fn : fns) {
@@ -254,6 +264,14 @@ void SetupHookNtdll(IMG Image)
 	g_LdrGetProcedureAddress = (ntdll::LdrGetProcedureAddress)RTN_Funptr(RTN_FindByName(Image, "LdrGetProcedureAddress"));
 	g_pRtlInitUnicodeString = (ntdll::RtlInitUnicodeString)RTN_Funptr(RTN_FindByName(Image, "RtlInitUnicodeString"));
 	g_pRtlInitAnsiString = (ntdll::RtlInitAnsiString)RTN_Funptr(RTN_FindByName(Image, "RtlInitAnsiString"));
+
+	ntdll::UNICODE_STRING dn;
+#ifdef _WIN64
+	g_pRtlInitUnicodeString(&dn, L"Dumper_x64.dll");
+#else
+	g_pRtlInitUnicodeString(&dn, L"Dumper_x86.dll");
+#endif
+	g_LdrLoadDll(NULL, NULL, &dn, &hDump);
 
 #ifndef _WIN64
 	gX86SwitchTo64BitMode = X86SwitchTo64BitMode();
@@ -288,6 +306,9 @@ void SetupHookNtdll(IMG Image)
 /* ===================================================================== */
 // Instrumentation callbacks
 /* ===================================================================== */
+typedef const ntdll::DWORD(WINAPI* def_dumperFileAlignA)(const char* filename, ntdll::BYTE* image);
+typedef const ntdll::DWORD(WINAPI* def_dumperMemAligA)(const char* filename, ntdll::BYTE* image);
+
 
 VOID Transitions(
 	const CONTEXT* ctx, 
@@ -312,45 +333,68 @@ VOID Transitions(
 	std::string targetName = hexstr(Address);
 
 	if (isCallerPeModule) {
-		callerName = IMG_Name(callerModule);
+		callerName = util::FileBasename(IMG_Name(callerModule));
 	}
 
 	if (isTargetPeModule) {
-		targetName = IMG_Name(targetModule);
+		targetName = util::FileBasename(IMG_Name(targetModule));
 	}
 
 	if (gX86SwitchTo64BitMode && gX86SwitchTo64BitMode == Address) {
 		isTargetPeModule = true;
 	}
 
-	if (!isCallerPeModule || !isTargetPeModule) {
-		*logging << callerName << " -> " << targetName << std::endl;
-		MemRange range = MemPageRange(Address);
-		MemRange range_prev = MemPageRange((ADDRINT)range.Base()-1);
-		MemRange range_prev_2 = MemPageRange((ADDRINT)range_prev.Base() - 1);
+	for (const auto& e : _UnpackCtx.TargetsImg) {
+		if (e == callerModule) {
+			std::string targetFnName = RTN_FindNameByAddress(Address);
+			ADDRINT rva = prevVA -  IMG_LoadOffset(callerModule);
+			*logging << callerName << "::" << rva << " -> " << targetName << "::" << targetFnName << std::endl;
+			break;
+		}
+	}
 
-
-		ntdll::ULONG eop = (ntdll::ULONG)(Address - (ADDRINT)range_prev_2.Base());
-		ntdll::ULONG eop_ = (ntdll::ULONG)(Address);
-		ntdll::ULONG base = (ntdll::ULONG)range_prev_2.Base();
-
-		*logging << "Dumping " << std::hex << base << " eop " << std::hex << eop << std::endl;
-
+	if (!isCallerPeModule && isTargetPeModule) {
+		std::string targetFnName = RTN_FindNameByAddress(Address);
+		*logging << callerName << " -> " << targetName << "::" << targetFnName << std::endl;
+	}
+	for ( auto& e : memtrack_lookup) {
+		if ((ADDRINT)e.second.BaseAddress <= Address && \
+			Address <= (ADDRINT)e.second.BaseAddress+e.second.RegionSize) 
+		{
+			if (!e.second.isDump){
+				*logging << "DUMP ME!!" << std::endl;
+				e.second.isDump = true;
+				std::string filename = "dump_" + hexstr(e.second.BaseAddress) + "_.bin";
+				std::ofstream fs(filename.c_str(), std::ios::binary);
+				fs.write((char*)e.second.BaseAddress, e.second.RegionSize);
+				fs.close();
+			}
+			break;
+		}
+	}
+	if (0x18001ee74 == Address) {
 		/* Loading Scylla the hardway
 		 */
 		ntdll::ANSI_STRING fn;
-		ntdll::UNICODE_STRING dn;
-		ntdll::HMODULE hScylla = NULL;
 
-		g_pRtlInitUnicodeString(&dn, L"Scylla_x86.dll");
-		g_pRtlInitAnsiString(&fn, "ScyllaDumpCurrentProcessA");
-		g_LdrLoadDll(NULL, NULL, &dn, &hScylla);
-		def_ScyllaDumpCurrentProcessA ScyllaDumpCurrentProcessA = NULL;
-		g_LdrGetProcedureAddress(hScylla, &fn, 0, (ntdll::PVOID*)&ScyllaDumpCurrentProcessA);
 
-		ScyllaDumpCurrentProcessA(NULL, (ntdll::DWORD_PTR)base, (ntdll::DWORD_PTR)eop_, "out.txt");
-		PIN_ApplicationBreakpoint(ctx, tid, TRUE, NULL);
-		//out << std::hex << prevVA << " -> " << std::hex << Address << std::endl;
+		g_pRtlInitAnsiString(&fn, "dumperMemAligA");
+
+		//__debugbreak();
+		def_dumperMemAligA dumperMemAligA = NULL;
+		g_LdrGetProcedureAddress(hDump, &fn, 0, (ntdll::PVOID*)&dumperMemAligA);
+
+		dumperMemAligA("dump.bin", (ntdll::BYTE*)0x180000000);//, (ntdll::DWORD_PTR)0x18001ee74);
+	}
+	if (isCallerPeModule && !isTargetPeModule) {
+		std::string targetFnName = RTN_FindNameByAddress(Address);
+
+		/*MemRange range = MemPageRange(Address);
+
+		ntdll::ULONGLONG eopRVA = (ntdll::ULONGLONG)(Address - (ADDRINT)range.Base());
+		ntdll::ULONGLONG eopVA = (ntdll::ULONGLONG)(Address);
+		ntdll::ULONGLONG base = (ntdll::ULONGLONG)range.Base();
+		ntdll::ULONGLONG len = (ntdll::ULONGLONG)range.End() - base;*/
 	}
 }
 
@@ -385,6 +429,10 @@ VOID ImageLoad(IMG img, VOID* v)
 	if (dllName.compare("ntdll.dll") == 0) {
 		SetupHookNtdll(img);
 	}
+
+	if (_UnpackCtx.TargetModuleName.compare(dllName) == 0) {
+		_UnpackCtx.TargetsImg.push_back(img);
+	}
 }
 
 
@@ -397,11 +445,20 @@ int main(int argc, char* argv[])
 		return Usage();
 	}
 
+	_UnpackCtx.TargetModuleName = util::FileBasename(KnobModuleName.Value());
+	if (_UnpackCtx.TargetModuleName.length() == 0) {
+		for (int i = 1; i < (argc - 1); i++) {
+			if (strcmp(argv[i], "--") == 0) {
+				_UnpackCtx.TargetModuleName = util::FileBasename(argv[i + 1]);
+				break;
+			}
+		}
+	}
 
 	IMG_AddInstrumentFunction(ImageLoad, NULL);
 	INS_AddInstrumentFunction(Instruction, NULL);
 
-	syscallTlsKey = PIN_CreateThreadDataKey(NULL);
+	_UnpackCtx.syscallTlsKey = PIN_CreateThreadDataKey(NULL);
 
 	PIN_AddSyscallEntryFunction(SyscallEntry, NULL);
 	PIN_AddSyscallExitFunction(SyscallExit, NULL);

@@ -132,7 +132,7 @@
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(ProjectDir)package\PinUnpack32.dll</Command>
+      <Command>copy $(TargetPath) $(ProjectDir)package\$(TargetName)_$(PlatformTarget)$(TargetExt)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -173,7 +173,7 @@
       <AllowIsolation>true</AllowIsolation>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(ProjectDir)package\PinUnpack64.dll</Command>
+      <Command>copy $(TargetPath) $(ProjectDir)package\$(TargetName)_$(PlatformTarget)$(TargetExt)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -218,7 +218,7 @@
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(ProjectDir)package\PinUnpack32.dll</Command>
+      <Command>copy $(TargetPath) $(ProjectDir)package\$(TargetName)_$(PlatformTarget)$(TargetExt)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -264,7 +264,7 @@
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(ProjectDir)package\PinUnpack64.dll</Command>
+      <Command>copy $(TargetPath) $(ProjectDir)package\$(TargetName)_$(PlatformTarget)$(TargetExt)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

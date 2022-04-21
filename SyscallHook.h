@@ -1,5 +1,8 @@
 #pragma once
 
+#include "pin.H"
+#include "Ntdll.h"
+
 typedef void* (__stdcall* FnSyscallInterceptExit)(
 	ntdll::NTSTATUS ntstatus, void* data);
 
@@ -102,6 +105,7 @@ struct MEMTRACK {
 	ntdll::PVOID BaseAddress;
 	ntdll::SIZE_T RegionSize;
 	ntdll::ULONG Protect;
+	BOOL isDump;
 };
 
 struct FREETRACK {

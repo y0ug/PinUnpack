@@ -5,6 +5,7 @@ import ctypes
 import pefile
 import subprocess
 import time
+import pathlib
 
 from platform import uname
 
@@ -62,25 +63,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
     log.setLevel(max(2 - args.verbose_count, 1) * 10)
 
-    pin_path = 'Y:\\pin.exe'
-    if 'Microsoft' in uname().release:
-        pin_path = '/mnt/c/pin/pin.exe'
-
     script_path = os.path.dirname(os.path.abspath(__file__))
+
+    pin_path = f'{pathlib.Path(__file__).anchor}pin\\pin.exe'
+    if not os.path.exists(pin_path):
+        pin_path = f'{pathlib.Path(__file__).anchor}pin.exe'
+        if not os.path.exists(pin_path):
+            raise Exception("pin.exe not found")
 
     target_fn = args.filename
     pe = pefile.PE(target_fn)
 
     print(f'{pe.FILE_HEADER.Machine:x}')
     if pe.FILE_HEADER.Machine == pefile.MACHINE_TYPE["IMAGE_FILE_MACHINE_I386"]:
-        bit = '32'
+        bit = 'x86'
     elif pe.FILE_HEADER.Machine == pefile.MACHINE_TYPE["IMAGE_FILE_MACHINE_AMD64"]:
-        bit = '64'
+        bit = 'x64'
     else:
         raise Exception(f'Machine {pe.FILE_HEADER.Machine:x} is not supported')
 
-    module = f'{args.module}{bit}.dll'
+    module = f'{args.module}_{bit}.dll'
     log_fn = f'{target_fn}.log'
+
+    if os.path.exists(log_fn): os.remove(log_fn)
 
     # path to pin.exe
     cli = [pin_path, ]
@@ -94,12 +99,14 @@ if __name__ == "__main__":
     # Set tool module and options
     cli += ['-t', os.path.join(script_path, module), '-o', log_fn]
 
+    if pe.is_dll():
+        cli += ['-m', os.path.basename(target_fn)]
     # Finish pin.exe switch
     cli += ['--', ]
 
     # Target exe/argv
     if pe.is_dll():
-        cli += [os.path.join(script_path, f'dll_load{bit}.exe'), target_fn]
+        cli += [os.path.join(script_path, f'dll_load_{bit}.exe'), target_fn]
     else:
         cli += [target_fn]
 

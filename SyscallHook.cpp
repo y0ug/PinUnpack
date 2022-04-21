@@ -1,11 +1,9 @@
-#include "Ntdll.h"
 #include "SyscallHook.h"
 #include "Util.h"
 
 #include <iostream>
 #include <fstream>
 
-#include "pin.H"
 
 
 extern std::ofstream* logging;
@@ -254,11 +252,18 @@ VOID _HookNtAllocateVirtualMemoryRet(ntdll::NTSTATUS ntstatus, ALLOCTRACK *alloc
 		<< std::endl;
 
 	if (ntstatus == 0) {
+		if (alloc->Protect == 0x10 ||
+			alloc->Protect == 0x20 ||
+			alloc->Protect == 0x40) {
+			*logging << "#### alert track me" << std::endl;
+		}
+
 		if (memtrack_lookup.count(alloc->BaseAddress) == 0) {
 			MEMTRACK track{
 				alloc->BaseAddress,
 				alloc->RegionSize,
-				alloc->Protect
+				alloc->Protect,
+				false
 			};
 			memtrack_lookup[track.BaseAddress] = track;
 		}
@@ -295,6 +300,18 @@ VOID _HookNtProtectVirtualMemoryRet(ntdll::NTSTATUS ntstatus, PROTECTTRACK *prot
 		<< ", " << std::hex << *protect->pOldProtect
 		<< ")" << " = " << std::hex << ntstatus
 		<< std::endl;
+
+	if (ntstatus == 0) {
+		if (protect->NewProtect == 0x10 ||
+			protect->NewProtect == 0x20 ||
+			protect->NewProtect == 0x40) {
+			*logging << "#### alert track me" << std::endl;
+		}
+		if (memtrack_lookup.count(protect->BaseAddress) == 1) {
+			
+			memtrack_lookup[(ntdll::PVOID*)*(protect->pBaseAddress)].Protect = protect->NewProtect;
+		}
+	}
 }
 
 
