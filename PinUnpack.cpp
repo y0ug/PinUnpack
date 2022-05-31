@@ -49,7 +49,22 @@ public:
 
 std::ofstream* logging;
 UnpackCtx _UnpackCtx;
+
+typedef const ntdll::DWORD(WINAPI* def_dumperFileAlignA)(const char* filename, ntdll::BYTE* image);
+typedef const ntdll::DWORD(WINAPI* def_dumperMemAligA)(const char* filename, ntdll::BYTE* image);
+
+
+
+ntdll::LdrLoadDll g_LdrLoadDll = NULL;
+ntdll::LdrGetProcedureAddress g_LdrGetProcedureAddress = NULL;
+ntdll::RtlInitUnicodeString g_RtlInitUnicodeString = NULL;
+ntdll::RtlInitAnsiString g_RtlInitAnsiString = NULL;
+ntdll::RtlFreeUnicodeString g_RtlFreeUnicodeString = NULL;
+ntdll::RtlFreeAnsiString g_RtlFreeAnsiString = NULL;
+
 ntdll::HMODULE hDump = NULL;
+def_dumperMemAligA g_dumperMemAlignA = NULL;
+
 extern std::map<ntdll::PVOID, MEMTRACK> memtrack_lookup;
 
 
@@ -235,10 +250,7 @@ void SyscallEntry(
 	*/
 }
 
-ntdll::LdrLoadDll g_LdrLoadDll = NULL;
-ntdll::LdrGetProcedureAddress g_LdrGetProcedureAddress = NULL;
-ntdll::RtlInitUnicodeString g_pRtlInitUnicodeString = NULL;
-ntdll::RtlInitAnsiString g_pRtlInitAnsiString = NULL;
+
 
 void SetupHookNtdll(IMG Image)
 {
@@ -262,16 +274,24 @@ void SetupHookNtdll(IMG Image)
 
 	g_LdrLoadDll = (ntdll::LdrLoadDll)RTN_Funptr(RTN_FindByName(Image, "LdrLoadDll"));
 	g_LdrGetProcedureAddress = (ntdll::LdrGetProcedureAddress)RTN_Funptr(RTN_FindByName(Image, "LdrGetProcedureAddress"));
-	g_pRtlInitUnicodeString = (ntdll::RtlInitUnicodeString)RTN_Funptr(RTN_FindByName(Image, "RtlInitUnicodeString"));
-	g_pRtlInitAnsiString = (ntdll::RtlInitAnsiString)RTN_Funptr(RTN_FindByName(Image, "RtlInitAnsiString"));
+	g_RtlInitUnicodeString = (ntdll::RtlInitUnicodeString)RTN_Funptr(RTN_FindByName(Image, "RtlInitUnicodeString"));
+	g_RtlInitAnsiString = (ntdll::RtlInitAnsiString)RTN_Funptr(RTN_FindByName(Image, "RtlInitAnsiString"));
+	g_RtlFreeUnicodeString = (ntdll::RtlFreeUnicodeString)RTN_Funptr(RTN_FindByName(Image, "RtlFreeUnicodeString"));
+	g_RtlFreeAnsiString = (ntdll::RtlFreeAnsiString)RTN_Funptr(RTN_FindByName(Image, "RtlFreeAnsiString"));
 
 	ntdll::UNICODE_STRING dn;
 #ifdef _WIN64
 	g_pRtlInitUnicodeString(&dn, L"Dumper_x64.dll");
 #else
-	g_pRtlInitUnicodeString(&dn, L"Dumper_x86.dll");
+	g_RtlInitUnicodeString(&dn, L"Dumper_x86.dll");
+	//const ntdll::UNICODE_STRING dn = RTL_CONSTANT_STRING(L"Dumper_x86.dll");
 #endif
 	g_LdrLoadDll(NULL, NULL, &dn, &hDump);
+
+	ntdll::ANSI_STRING fn;
+	g_RtlInitAnsiString(&fn, "dumperMemAlignA");
+	g_LdrGetProcedureAddress(hDump, &fn, 0, (ntdll::PVOID*)&g_dumperMemAlignA);
+
 
 #ifndef _WIN64
 	gX86SwitchTo64BitMode = X86SwitchTo64BitMode();
@@ -284,7 +304,7 @@ void SetupHookNtdll(IMG Image)
 			<< "RtlInitAnsiString @ " << std::hex << pRtlInitAnsiString << std::endl;*/
 
 		ntdll::ANSI_STRING fn;
-		g_pRtlInitAnsiString(&fn, "Wow64Transition");
+		g_RtlInitAnsiString(&fn, "Wow64Transition");
 
 		void* pWow64Transition = 0;
 		pWow64Transition = (void*)RTN_Funptr(RTN_FindByName(Image, "Wow64Transition"));
@@ -306,9 +326,6 @@ void SetupHookNtdll(IMG Image)
 /* ===================================================================== */
 // Instrumentation callbacks
 /* ===================================================================== */
-typedef const ntdll::DWORD(WINAPI* def_dumperFileAlignA)(const char* filename, ntdll::BYTE* image);
-typedef const ntdll::DWORD(WINAPI* def_dumperMemAligA)(const char* filename, ntdll::BYTE* image);
-
 
 VOID Transitions(
 	const CONTEXT* ctx, 
@@ -364,28 +381,17 @@ VOID Transitions(
 			if (!e.second.isDump){
 				*logging << "DUMP ME!!" << std::endl;
 				e.second.isDump = true;
-				std::string filename = "dump_" + hexstr(e.second.BaseAddress) + "_.bin";
-				std::ofstream fs(filename.c_str(), std::ios::binary);
-				fs.write((char*)e.second.BaseAddress, e.second.RegionSize);
-				fs.close();
+				std::string filename = "dump_" + hexstr(e.second.BaseAddress) ;
+				std::ofstream fs((filename + ".dmp").c_str(), std::ios::binary);
+				//fs.write((char*)e.second.BaseAddress, e.second.RegionSize);
+				//fs.close();
+
+				g_dumperMemAlignA((filename + ".bin").c_str(), (ntdll::BYTE*)e.second.BaseAddress);
 			}
 			break;
 		}
 	}
-	if (0x18001ee74 == Address) {
-		/* Loading Scylla the hardway
-		 */
-		ntdll::ANSI_STRING fn;
 
-
-		g_pRtlInitAnsiString(&fn, "dumperMemAligA");
-
-		//__debugbreak();
-		def_dumperMemAligA dumperMemAligA = NULL;
-		g_LdrGetProcedureAddress(hDump, &fn, 0, (ntdll::PVOID*)&dumperMemAligA);
-
-		dumperMemAligA("dump.bin", (ntdll::BYTE*)0x180000000);//, (ntdll::DWORD_PTR)0x18001ee74);
-	}
 	if (isCallerPeModule && !isTargetPeModule) {
 		std::string targetFnName = RTN_FindNameByAddress(Address);
 
